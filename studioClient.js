@@ -142,7 +142,8 @@ module.exports = {
             studioClient.connect(childUrl);
             // setTimeout(e => studioClient.connect(childUrl), 4000);
         }
-        window.studioClient = studioClient;
+
+        core.studio = studioClient;
 
         done(studioClient);
     }
