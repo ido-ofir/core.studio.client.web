@@ -1,6 +1,7 @@
 
 module.exports = {
     name: 'core.studio.client.web',
+    events: ['update', 'template.hover', 'template.select'],
     init(definition, done){
         
         var core = this;
@@ -58,6 +59,7 @@ module.exports = {
                         action: 'init',
                         arguments: [{
                             monitor: [],
+                            actions: Object.keys(core.actions),
                             components: Object.keys(core.components),
                             templates: Object.keys(core.templates),
                             definitions: definitions
@@ -73,7 +75,6 @@ module.exports = {
                         setTimeout(function(){
                             if(studioClient.children[0]){
                                 if(!studioClient.children[0].self){
-                                    console.log('removing childUrl');
                                     localStorage.removeItem('core.studioClient.childUrl');
                                 }
                             }
@@ -82,9 +83,23 @@ module.exports = {
                 },
                 reload(){
                     location.reload();
+                },
+                emit(eventName, data){
+                    core.emit(eventName, data);
+                },
+                updateByType(type, value){
+                    var t = core.types[type];
+                    var id = t.identifier && value[t.identifier];
+                    if(id){
+                        core.emit(`core.${ type }.update.${id}`, value);
+                    }
+                    core.emit(`core.${ type }.update`, value);
+                },
+                getDefinition(type, id){
+                    
                 }
             },
-            postMessage(message){
+            postMessage(message){  // { ns: 'core.studio.message', action: 'init', arguments: ['1', '2'] }
                 var children = studioClient.children || [];
                 if(parent !== window){
                     children = [parent].concat(children);
@@ -92,10 +107,9 @@ module.exports = {
                 children.map(win => {
                     var values = [];
                     win.postMessage(
-                        JSON.stringify({
-                                ns: 'core.browserWindow.message',
-                                ...message
-                            }, (key, value) => {
+                        JSON.stringify(
+                            Object.assign({ ns: 'core.browserWindow.message'}, message),
+                            (key, value) => {
                                 if(value && (typeof value === 'object')){
                                     if(values.indexOf(value) > -1){
                                         return '[Circular]'
@@ -108,12 +122,15 @@ module.exports = {
                     '*')
                 });
             },
-            connect(url, name){
+            open(url, name){
                 var width = 800;
                 var height = 600;
-                studioClient.children.push(window.open(url, 'studio', ''));  // `left=${ (screen.width - width) / 2 },top=${ (screen.height - height) / 2 },width=${ width },height=${ height }`
-                console.log('setting childUrl');
+                studioClient.children.push(window.open(url, name || 'studio', ''));  // `left=${ (screen.width - width) / 2 },top=${ (screen.height - height) / 2 },width=${ width },height=${ height }`
                 localStorage.setItem('core.studioClient.childUrl', url);
+            },
+            close(){
+                studioClient.children.map(w => w.close());
+                localStorage.removeItem('core.studioClient.childUrl');
             }
         }
 
@@ -122,7 +139,6 @@ module.exports = {
             try{
                 message = JSON.parse(message.data);
                 if(message && (message.ns === 'core.studio.message')){
-                    console.log('message in studioClient', message);
                     if(message.action){
                         if(!core.isFunction(studioClient.api[message.action])){
                             return console.warn(`cannot find action '${message.action}'`)
@@ -137,9 +153,8 @@ module.exports = {
 
         var childUrl = localStorage.getItem('core.studioClient.childUrl');
         if(childUrl){
-            console.log('connecting child');
             reloading = true;
-            studioClient.connect(childUrl);
+            studioClient.open(childUrl);
             // setTimeout(e => studioClient.connect(childUrl), 4000);
         }
 
